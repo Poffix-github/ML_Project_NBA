@@ -1,0 +1,3 @@
+- Cambiare numero di partite considerate nelle colonne aggregate
+- Aggiungere gli ID dei giocatori iniziali
+- Provare diversi modelli
