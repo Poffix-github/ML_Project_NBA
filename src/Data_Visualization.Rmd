@@ -1,0 +1,27 @@
+---
+title: "Data Visualization"
+author: "Guido Cera"
+date: "2023-01-29"
+output: html_document
+---
+
+```{r original}
+df <- read.csv("../data/games.csv")
+
+library(ggplot2)
+jpeg("scatter plots original dataset.jpg", height = 1800, width = 3600, quality = 100)
+plot(df)
+dev.off()
+
+```
+
+```{r enginered}
+df <- read.csv("../data/dataframe.csv")
+
+library(ggplot2)
+jpeg("scatter plots feature enginering.jpg", height = 1800, width = 3600, quality = 100)
+plot(df)
+dev.off()
+
+```
+
