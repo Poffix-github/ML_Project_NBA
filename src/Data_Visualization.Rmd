@@ -25,3 +25,18 @@ dev.off()
 
 ```
 
+```{r scatter_Home_Wins}
+df <- read.csv("../data/dataframe.csv")
+
+library(ggplot2)
+
+df$HOME_TEAM_WINS <- as.factor(df$HOME_TEAM_WINS)
+ggplot(df, aes(x=HOME_TEAM_WINS, y=elo_difference, fill=HOME_TEAM_WINS)) + 
+  # point accumulation
+  # geom_count(show.legend = FALSE) +
+  # boxplot
+  geom_boxplot(show.legend = FALSE)
+jpeg("scatter plots home_wins.jpg", height = 1800, width = 3600, quality = 100)
+dev.off()
+
+```
