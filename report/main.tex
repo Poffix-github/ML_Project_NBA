@@ -1,0 +1,173 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{paralist}
+\usepackage{color}
+\usepackage[detect-weight=true, binary-units=true]{siunitx}
+\usepackage{pgfplots}
+\usepackage{authblk}
+\usepackage{url}
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{afterpage}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{graphicx}
+
+\title{Machine Learning and Data Mining project:\\Basketball}
+\author[1]{Guido Cera}
+\author[2]{Simone Cappiello}
+\affil[1]{
+    problem statement,
+    solution design,
+    solution development,
+    data gathering,
+    writing
+}
+\affil[2]{
+    problem statement,
+    solution design,
+    solution development,
+    data gathering,
+    writing
+}
+\date{Course of 2022-2023 - Introduction to Machine Learning}
+
+
+
+
+
+\begin{document}
+
+\maketitle
+
+
+\section{Problem statement}
+A dataset containing information about all NBA games from season 2003 to 2022 is available.
+The aim of the project is to design and assess one or more machine learning models able to predict the outcome of games. It is, therefore, a binary classification problem where the following convention for the response variable $Y$ is adopted:
+\begin{equation*}
+    Y=
+    \begin{cases}
+        1,&\text{the hosting team of the game, "home team", wins (Negative);}\\
+        0,&\text{the visitor team of the game, "away team", wins (Positive)}
+    \end{cases}
+\end{equation*}
+ Each row of the provided dataset, $D=X\times Y$, contains team-level details, $X$, about a single game (and its outcome $Y$), most of which can be known only after the game has ended. We are instead in the position where the game has not yet been played and want to predict its outcome. Consequently, feature engineering to compute usable predictors is needed. It will take this form:
+$$ f_{pre-proc}: \mathcal{P}(X \cup Y) \footnote{$\mathcal{P}(A) \ is\ the\ powerset\  of\  A,\  the\  set\  of\  all\  possible\  subsets\  of\  A\ (notation\ \mathcal{P}^{*}(A)\ allows\  duplicates).$}\longrightarrow X' $$
+\begin{itemize}
+    \item $X$ provided: each observation contains team-level data about one game (date, points scored, rebounds by each team etc.), it cannot be directly used to predict $Y$;
+    \item $X'$ to compute: contains the actual predictors that summarize, for each game, results of previous matches played by the two teams involved in the game.
+\end{itemize}
+Then it is required to find a suitable learning technique:
+$$ f'_{learn}: \mathcal{P}^{*}(X' \times Y) \longrightarrow \textit{M}\ \ \ \ \ \ f'_{predict}: X' \times \textit{M} \longrightarrow Y  $$
+
+
+\section{Assessment and performance indexes}
+\label{sec:Assex}
+Considering we are dealing with binary classification we choose the following assessment methods:
+\begin{itemize}
+    \item \textbf{Accuracy}: computed using 10-fold Cross Validation.
+    \item \textbf{Confusion Matrix}.
+    \item \textbf{ROC Curve and AUC}.
+    \item \textbf{FNR, FPR}: we identify visitor team victory as positive ($Y = 0$, the least frequent case) and home team victory as negative ($Y = 1$).
+\end{itemize}
+To compare the \textbf{efficiency} of different learning techniques we use \textbf{time} spent in learning the models, expressed in seconds.
+
+\section{Proposed solution}
+\label{sec:Proposedsol}
+\subsection{Algorithmic overview}
+A sketch of our approach to solve the problem is the following:
+\begin{enumerate}
+    \item Feature engineering
+    \item For each chosen Learning Technique:
+    \begin{enumerate}
+        \item Choose Features (select all in first iteration, optionally remove least significant ones in following iterations)
+        \item Fit model with chosen features, using 10-fold CV
+        \item Assess Model, using indexes presented in \hyperref[sec:Assex]{Section 2}.
+        %\\ First iteration (model with all predictors, optional for the others): evaluate features' importance.
+        \item If satisfied \footnote{"Satisfied" refers to the whole process of model assessment present in \hyperref[sec:ExpEva]{Section 4}. Outperforming the dummy classifier would be sufficient, though in practice we tried different models each time attempting to improve results that our engineered features could reach.}, stop, otherwise go back to (a).
+    \end{enumerate}
+\end{enumerate}
+The learning techniques we focused on are Random Forest and Logistic regression. A detailed description of the first step, the most important, follows.
+
+\subsection{Feature engineering}
+Computing usable features is required. Here's a summary table to define them (\textbf{important note}: each value in the list is calculated for both the home team and the away team, for a total of 14 predictors): \\
+\textbf{1) \underline{Elo Rating}}\ \ \ \  Measure of a team's skill level widely used in zero-sum games like basketball ~\cite{Elo1978TheRO}. We used this formulation from Silver et al. ~\cite{bworld}, it takes into account both margin of victory and homecourt advantage (common phenomenon for which multiple factors combine to increase the likelihood of the home team winning.~\cite{doi:10.1260/1747-9541.9.4.681}). 
+:
+\begin{itemize}
+    \item Initialize to 1500 the Elo rating of each team.
+    \item \textbf{Elo\textunderscore diff = Winner\textunderscore Elo\  - Loser\textunderscore Elo\  +\  \boldmath{$(-1)^{1-y}  \cdot100$}}\ \ \  [$y=1$\ if home team is  the winner, $y=0$\ otherwise. The term $(-1)^{1-y}  \cdot100$ is  used to consider homecourt advantage in calculating 
+    Elo ratings, giving +100 points of advantage to home team]
+    \item \textbf{mvm = \boldmath{$\frac{(Winner\textunderscore PTS - Loser\textunderscore PTS + 3)^{0.8}}{7.5 + 0.006*Elo\textunderscore diff}$}}\ \ \ [m.v.m. stands for "margin of victory multiplier", it takes into account the margin of victory with which a team won (or lost if negative) a game evaluating the difference between scored points]~\cite{bworld}
+    \item  Calculate estimates of probabilities for the actual winner and loser teams to win before the game ~\cite{Best2023}.\\
+    \boldmath{
+    \begin{cases}
+        \begin{equation}
+            Pr(Winner\ wins)=\frac{1}{1+10^{\frac{-Elo\textunderscore diff}{400}}} \\  Pr(Loser\ wins)=\frac{1}{1+10^{\frac{Elo\textunderscore diff}{400}}}=1-Pr(Winner\ wins)
+        \end{equation}
+    \end{cases}
+    }\\
+    \item Update Elo ratings (Each will be placed and used in the next game, chronologically, played by the corresponding team) ~\cite{Best2023}:\\
+     \boldmath{
+     \begin{cases}
+         $$ Winner\textunderscore Elo\textunderscore updated = Winner \textunderscore Elo + k\cdot(1- P(Winner\ wins))\cdot mvm \\ Loser\textunderscore Elo\textunderscore updated = Loser \textunderscore Elo + k\cdot(0 - P(Loser\ wins))\cdot mvm $$ 
+     \end{cases}}
+     [$k=20$ ~\cite{bworld}]
+\end{itemize} 
+\\
+\textbf{2)\underline{WIN\textunderscore PCT }}\ \ \  Win Percentage in last N matches. Measures, in percentage, the amount of matches won by each team in the N most recent games they took part in before the current one ($\frac{\# Matches\textunderscore won\textunderscore in\textunderscore last\textunderscore N\textunderscore games}{N}$).
+\\ 
+\\
+\textbf{3)\underline{FT\textunderscore avg\textunderscore PCT}} \ \ \ Average of last N matches' Field Throws percentage. For each game, in $X$, there is a value for free throws percentage ($\frac{\# Free\textunderscore Throws\textunderscore made}{\# Free\textunderscore Throws\textunderscore attempted}$). We considered the mean of these values over the N most recent games they took part in ($\sum_{i=1}^{N}  \frac{FT\textunderscore PCT_{i}}{N})$).  
+\\
+\textbf{4)\underline{FG\textunderscore avg\textunderscore PCT}}\ \ \ Average of last N matches' Field Goals percentage. Same algorithm used to compute FT\textunderscore avg\textunderscore PCT.  
+\\
+\textbf{5)\underline{FG3\textunderscore avg\textunderscore PCT}}\ \ \ Average of last N matches 3 points Field Goals percentage. Same algorithm used to compute FT\textunderscore avg\textunderscore PCT. 
+\\
+\textbf{6)\underline{REB\textunderscore avg}}\ \ \ Average number of Rebounds in last N matches. For each team we computed the mean number of rebounds it performed in the most recent N matches it took part in ($\sum_{i=1}^{N}  \frac{REB_{i}}{N}$). 
+\\
+\textbf{7)\underline{AST\textunderscore avg}}\ \ \ Average number of Assists in last N matches. For each team we computed the mean number of assists it performed in the most recent N matches it took part in ($\sum_{i=1}^{N}  \frac{AST_{i}}{N}$) 
+\\
+
+% \subsection{Applying Learning Techniques}
+% After having computed a bag of usable features $X'$, we fit different models trying different combinations and versions of them.
+% For each fitted model we calculate variable importance and identify the most important features. We calculate accuracy, FPR, FNR, AUC and efficiency in terms of time spent for learning for comparing the models. The learning techniques we focused on the most are \textbf{Random Forest} and \textbf{Logistic Regression}. We applied 10-CV for learning and testing all of them.
+
+
+\section{Experimental evaluation}
+\label{sec:ExpEva}
+\subsection{Data}
+We worked on the "games.csv" datafile which contains team-level results of the games. We calculated predictors starting from the first game of 2003, but used only seasons from 2004 on in phase of learning and prediction.
+
+\subsection{Procedure}
+We compared our accuracy results with the dummy classifier baseline (lower bound: 58\%) and with the accuracy upper limit reached so far according to research papers (from 70\% to 74\%  ~\cite{Perricone2016PredictingRF}).  We compared models fitted using $N=10$ and $N=20$ when calculating the features defined in \hyperref[sec:Proposedsol]{section 3} (N refers to the number of preceding games considered).  In all the models displayed in \hyperref[tab:Tab1]{Table 1} we used all predictors defined in \hyperref[sec:Proposedsol]{section 3} except for Elo Rating, inserted as Elo Difference ($elo\textunderscore difference = home\textunderscore team\textunderscore elo - away\textunderscore team \textunderscore elo$) instead of a pair ($home\textunderscore team\textunderscore elo,\ \ away\textunderscore team \textunderscore elo$). For Random Forest we used the deafault parameters ($n_{tree} = 500$ and $n_{vars} = \sqrt{p}$).
+
+\subsection{Results and discussion}
+Results are summarized in \hyperref[tab:Tab1]{Table 1}. Regarding the value of $N$, we started with $N=20$ as suggested by Buursma ~\cite{Buursma2010}, then we tested other values and found the best one for our problem being $N=10$. Results suggest that a Logistic Regression model performs slightly better than Random Forest w.r.t effectiveness and is significantly more efficient. 
+\begin{table}[H]
+    \centering
+    \scalebox{0.9}{
+    \begin{tabular}{c c| c c c c c c}
+        \toprule
+        {$N$} & {Model} & {$Acc_\mu$} & {$Acc_\sigma$} & {AUC} & {FNR} & {FPR} & $t_l$ [\si{\second}] \\
+        \midrule
+        & Dummy & 0.589 & 0.0001 & 0.5 & 0.0 & 1.0 & 0.03\\
+        \midrule
+        \multirow{2}{*}{\textbf{10}}
+         & Random Forest & 0.652 & 0.017 & 0.683 & 0.223 & 0.539 & 426\\
+         & \textbf{Logistic Regression} & \textbf{0.663} & \textbf{0.016} & \textbf{0.699} & \textbf{0.196} & \textbf{0.539} & \textbf{0.94}\\
+         \midrule
+         \multirow{2}{*}{20}
+         & Random Forest & 0.645 & 0.017 & 0.678 & 0.225 & 0.534 & 426\\
+         & Logistic Regression & 0.662 & 0.016 & 0.699 & 0.196 & 0.541 &  0.86\\
+    \end{tabular} }
+    \caption{Results for different values of N and different models}
+    \label{tab:Tab1}
+\end{table}
+
+
+\newpage
+\bibliographystyle{plain}
+\bibliography{bibliography}
+
+\end{document}
